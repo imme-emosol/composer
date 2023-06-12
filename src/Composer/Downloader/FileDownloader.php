@@ -436,7 +436,29 @@ class FileDownloader implements DownloaderInterface, ChangeReportInterface
      */
     protected function getFileName(PackageInterface $package, string $path): string
     {
-        return rtrim($this->config->get('vendor-dir') . '/composer/tmp-' . md5($package . spl_object_hash($package)) . '.' . $this->getDistPath($package, PATHINFO_EXTENSION), '.');
+        $extension = $this->getDistPath($package, PATHINFO_EXTENSION);
+        if (!$extension) {
+            $context=stream_context_create(['http'=>['method'=>'HEAD',],]);
+            $headers = get_headers($package->getDistUrl(),true,$context);
+            if ($headers['Content-Disposition']){
+                $disposition = explode(';', $headers['Content-Disposition']);
+                $disposition = array_map('trim', $disposition);
+                foreach ($disposition as $k => $e) {
+                    $f=explode('=',$e);
+                    unset($disposition[$k]);
+                    $disposition[$f[0]]=$f[1]??null;
+                }
+                if (isset($disposition['filename*'])) {
+                    $fileName = str_replace('UTF-8\'\'', '', $disposition['filename*']);
+                    $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+                }
+                elseif (isset($disposition['filename'])) {
+                    $fileName = substr($disposition['filename'], 1, -1);
+                    $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+                }
+            }
+        }
+        return rtrim($this->config->get('vendor-dir') . '/composer/tmp-' . md5($package . spl_object_hash($package)) . '.' . $extension, '.');
     }
 
     /**
